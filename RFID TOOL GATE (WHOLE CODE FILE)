@@ -1,0 +1,167 @@
+/*
+
+  ////⚠️⚠️⚠️WARNING: MAKE SURE YOU DON'T MORE THAN 5V DC @ ANY POINT TO THE ARDUINO⚠️⚠️⚠️////
+
+  RFID-Based TOLL GATE FOR SECCURITY SYSTEM
+  Author: ZEEL MUKESHBHAI LADANI
+  Field: Diploma in Electrical Engineering (5th Semester)
+  Project: Home Automation and Security System and securities system
+
+  Description:
+  This project is an RFID-based door locking system designed to enhance home security. 
+  The system uses the RC522 RFID module to read RFID cards and a servo motor to control 
+  the locking mechanism. Only authorized cards (with specific UIDs) can unlock the door. 
+  Unauthorized access attempts trigger a red LED and buzzer alarm, while valid access 
+  results in unlocking the door, indicated by a green LED and buzzer sound.
+
+  Key Features:
+  - Controlled by RFID cards (User IDs can be expanded).
+  - Servo motor for controlling the door lock.
+  - Audio-visual feedback using a buzzer and LEDs.
+  - Customizable for different environments such as homes or offices.
+  - Designed with security in mind, ensuring a cost-effective and reliable solution.
+  
+  Innovative Aspects:
+  - Full integration of both hardware and software.
+  - Secure and robust design with replaceable components, reducing maintenance costs.
+  - Emphasizes the "Make in India" initiative by local development and customization.
+
+    Connect with the Author:
+  - Instagram: www.instagram.com/zeel_ladani129
+  - GitHub: https://github.com/zeelladani
+  
+  Components Used:
+  - Arduino Uno
+  - RC522 RFID module
+  - Servo motor (for door lock mechanism)
+  - Buzzer
+  - LEDs (Green and Red)
+
+  Project Date: [Current Date]
+
+  License: Open-source for educational purposes.
+
+
+
+VCC	3.3V
+GND	GND
+RST	Pin 9
+IRQ	Not connected
+MISO	Pin 12
+MOSI	Pin 11
+SCK	Pin 13
+SDA (SS)	Pin 10
+
+GREEN LED : PIN 4
+
+RED LED : PIN 5
+
+SERVO : PIN 7
+
+BUZZER : PIN 2
+
+*/
+
+#include <SPI.h>
+#include <MFRC522.h>
+#include <Servo.h>
+
+#define SS_PIN 10
+#define RST_PIN 9
+#define BUZZER_PIN 2
+#define SERVO_PIN 7
+#define GREEN_LED_PIN 4  // Green LED for Access Granted
+#define RED_LED_PIN 5    // Red LED for Access Denied
+
+Servo doorLock;  // Create a servo object to control the lock
+
+MFRC522 rfid(SS_PIN, RST_PIN);
+MFRC522::MIFARE_Key key;
+
+// List of allowed UIDs
+byte allowedUIDs[][4] = {
+  {0x56, 0x22, 0xB8, 0x89}  // First card
+ /* {0x01, 0xDF, 0x26, 0x26}  //second card but not acceceble */ 
+
+};
+const int allowedCards = 1;  // Number of allowed cards
+
+void setup() {
+  Serial.begin(9600);
+  SPI.begin();
+  rfid.PCD_Init();
+  doorLock.attach(SERVO_PIN);
+  doorLock.write(90);  // Lock the door (servo in locked position)
+
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(GREEN_LED_PIN, OUTPUT);
+  pinMode(RED_LED_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);  // Ensure buzzer is off initially
+  digitalWrite(GREEN_LED_PIN, LOW);  // Ensure GREEN LED is off initially
+  digitalWrite(RED_LED_PIN, LOW);  // Ensure RED LED is off initially
+  
+  Serial.println("Scan RFID card to unlock door");
+}
+
+void loop() {
+  // Check for new card
+  if (!rfid.PICC_IsNewCardPresent() || !rfid.PICC_ReadCardSerial()) {
+    return;
+  }
+
+  // Compare card UID
+  if (checkUID(rfid.uid.uidByte, rfid.uid.size)) {
+    unlockDoor();
+  } else {
+    unauthorizedAccess();
+  }
+
+  rfid.PICC_HaltA();  // Halt PICC
+  rfid.PCD_StopCrypto1();  // Stop encryption on PCD
+}
+
+bool checkUID(byte *uid, byte uidSize) {
+  if (uidSize != 4) {
+    return false;
+  }
+
+  for (int i = 0; i < allowedCards; i++) {
+    bool match = true;
+    for (byte j = 0; j < 4; j++) {
+      if (uid[j] != allowedUIDs[i][j]) {
+        match = false;
+        break;
+      }
+    }
+    if (match) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void unlockDoor() {
+  Serial.println("Access granted. Door unlocked!");
+  doorLock.write(0);  // Unlock the door (servo in unlocked position)
+  
+  digitalWrite(BUZZER_PIN, HIGH);  // Buzzer ON to indicate unlock
+  digitalWrite(GREEN_LED_PIN, HIGH);  // Turn on GREEN LED for access granted
+  delay(1000);  // Wait for 1 second
+  
+  digitalWrite(BUZZER_PIN, LOW);   // Buzzer OFF
+  digitalWrite(GREEN_LED_PIN, LOW);  // Turn off GREEN LED
+  delay(500);  // Keep the door unlocked for 1 more second
+  
+  doorLock.write(90);  // Lock the door again
+  Serial.println("Door locked.");
+}
+
+void unauthorizedAccess() {
+  Serial.println("Access denied. Unauthorized card.");
+  digitalWrite(BUZZER_PIN, HIGH);  // Buzzer ON for unauthorized access
+  digitalWrite(RED_LED_PIN, HIGH);  // Turn on RED LED for access denied
+  delay(1000);  // Buzzer sound and RED LED on for 1 second
+  
+  digitalWrite(BUZZER_PIN, LOW);   // Buzzer OFF
+  digitalWrite(RED_LED_PIN, LOW);  // Turn off RED LED
+}
